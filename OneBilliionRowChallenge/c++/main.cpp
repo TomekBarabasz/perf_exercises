@@ -1,0 +1,302 @@
+#include <fstream>
+#include <iostream>
+#include <cstdint>
+#include <immintrin.h>
+#include <map>
+#include <unordered_map>
+#include <string>
+#include <string_view>
+#include <sstream>
+#include <utility>
+#include <unistd.h>
+#include <charconv>
+
+uint64_t get_ticks() 
+{
+    return __rdtsc();
+}
+
+uint64_t calc_ticks_per_sec()
+{
+    auto tm_start = get_ticks();
+    usleep(1000000);
+    return get_ticks() - tm_start;
+}
+
+std::string pretty_print(uint64_t dt, uint64_t ticks_per_second)
+{
+    const auto dt_in_seconds = static_cast<double>(dt) / static_cast<double>(ticks_per_second);
+    const auto seconds = static_cast<uint64_t>(dt_in_seconds);
+    const auto fraction = dt_in_seconds - seconds;
+    const auto msec = static_cast<uint64_t>(fraction * 1000);
+    const auto usec = static_cast<uint64_t>(fraction * 1000000) % 1000;
+    std::ostringstream ss;
+    if (seconds > 0) {
+        ss << seconds << " s ";
+    }
+    ss << msec << " ms " << usec << " us";
+    return ss.str();
+}
+
+struct Record {
+    uint32_t cnt;
+    float sum;
+    float min;
+    float max;
+};
+
+void test_load_1(std::ifstream & input)
+{
+    using Database_t = std::map<std::string,Record>;
+    Database_t db;
+
+    std::string line;
+    std::string name;
+    float value;
+
+    size_t cnt_loaded {0};
+    while (std::getline(input, line)) {
+        if (line[0] == '#') continue;
+        const auto isep = line.find(';');
+        if (isep != std::string::npos) {
+            name = line.substr(0,isep);
+            value = std::stof(line.substr(isep+1));
+
+            auto it = db.find(name);
+            if (it == db.end()) {
+                db.emplace(name,Record{1,value,value,value});
+            } else {
+                auto & r = it->second;
+                ++r.cnt;
+                r.sum += value;
+                if (value < r.min)
+                    r.min = value;
+                if (value > r.max)
+                    r.max = value;
+            }
+            ++cnt_loaded;
+        }
+    }
+}
+
+void test_load_2(std::ifstream & input)
+{
+    using Database_t = std::map<std::string,Record,std::less<>>;
+    Database_t db;
+
+    std::string line;
+    size_t cnt_loaded {0};
+
+    while (std::getline(input, line)) {
+        if (line[0] == '#') continue;
+        const auto isep = line.find(';');
+        if (isep != std::string::npos) {
+            std::string_view name {line.data(),isep};
+            std::string_view svalue {line.data()+isep+1, line.size()-isep};
+            float value;
+            const auto [ptr, ec] = std::from_chars(svalue.data(), svalue.data() + svalue.size(), value);
+            if (ec == std::errc::invalid_argument) {
+                std::cout << "invalid line " << line << " svalue " << svalue << std::endl;
+            }
+
+            auto it = db.find(name);
+            if (it == db.end()) {
+                db.emplace(name,Record{1,value,value,value});
+            } else {
+                auto & r = it->second;
+                ++r.cnt;
+                r.sum += value;
+                if (value < r.min)
+                    r.min = value;
+                if (value > r.max)
+                    r.max = value;
+            }
+            ++cnt_loaded;
+        }
+    }
+}
+
+void test_load_3(std::ifstream & input)
+{
+    using Database_t = std::unordered_map<std::string,Record>;
+    Database_t db;
+
+    std::string line;
+    size_t cnt_loaded {0};
+
+    while (std::getline(input, line)) {
+        if (line[0] == '#') continue;
+        const auto isep = line.find(';');
+        if (isep != std::string::npos) {
+            std::string name = line.substr(0,isep);
+            std::string_view svalue {line.data()+isep+1, line.size()-isep};
+            float value;
+            const auto [ptr, ec] = std::from_chars(svalue.data(), svalue.data() + svalue.size(), value);
+            if (ec == std::errc::invalid_argument) {
+                std::cout << "invalid line " << line << " svalue " << svalue << std::endl;
+            }
+
+            auto it = db.find(name);
+            if (it == db.end()) {
+                db.emplace(name,Record{1,value,value,value});
+            } else {
+                auto & r = it->second;
+                ++r.cnt;
+                r.sum += value;
+                if (value < r.min)
+                    r.min = value;
+                if (value > r.max)
+                    r.max = value;
+            }
+            ++cnt_loaded;
+        }
+    }
+}
+
+void test_load_4(std::ifstream & input)
+{
+    struct StringHash {
+        using is_transparent = void;  // Allows heterogeneous lookup
+
+        // Hash function for std::string
+        std::size_t operator()(std::string const& s) const noexcept {
+            return std::hash<std::string>{}(s);
+        }
+
+        // Hash function for std::string_view
+        std::size_t operator()(std::string_view s) const noexcept {
+            return std::hash<std::string_view>{}(s);
+        }
+    };
+
+    // Custom equality comparator that works with std::string and std::string_view
+    struct StringEqual {
+        using is_transparent = void;  // Allows heterogeneous lookup
+
+        bool operator()(std::string const& lhs, std::string const& rhs) const noexcept {
+            return lhs == rhs;
+        }
+
+        bool operator()(std::string_view lhs, std::string_view rhs) const noexcept {
+            return lhs == rhs;
+        }
+
+        bool operator()(std::string const& lhs, std::string_view rhs) const noexcept {
+            return lhs == rhs;
+        }
+
+        bool operator()(std::string_view lhs, std::string const& rhs) const noexcept {
+            return lhs == rhs;
+        }
+    };
+    using Database_t = std::unordered_map<std::string_view,Record,StringHash,StringEqual>;
+    Database_t db;
+
+    std::string line;
+    size_t cnt_loaded {0};
+
+    while (std::getline(input, line)) {
+        if (line[0] == '#') continue;
+        const auto isep = line.find(';');
+        if (isep != std::string::npos) {
+            std::string_view name {line.data(),isep};
+            std::string_view svalue {line.data()+isep+1, line.size()-isep};
+            float value;
+            const auto [ptr, ec] = std::from_chars(svalue.data(), svalue.data() + svalue.size(), value);
+            if (ec == std::errc::invalid_argument) {
+                std::cout << "invalid line " << line << " svalue " << svalue << std::endl;
+            }
+
+            auto it = db.find(name);
+            if (it == db.end()) {
+                db.emplace(name,Record{1,value,value,value});
+            } else {
+                auto & r = it->second;
+                ++r.cnt;
+                r.sum += value;
+                if (value < r.min)
+                    r.min = value;
+                if (value > r.max)
+                    r.max = value;
+            }
+            ++cnt_loaded;
+        }
+    }
+}
+
+void test()
+{
+    std::string line {"name;3.1245926"};
+    const auto isep = line.find(';');
+    auto name = line.substr(0,isep);
+    auto value = std::stof(line.substr(isep+1));
+    std::cout << "name=" << name << " value=" << value << std::endl;
+
+    const auto ticks_per_sec = calc_ticks_per_sec();
+    std::cout << "ticks_per_sec " << ticks_per_sec << std::endl;
+    std::cout << "pretty_print 1s   :" << pretty_print(ticks_per_sec,ticks_per_sec) << std::endl;
+    std::cout << "pretty_print 1/2s :" << pretty_print(ticks_per_sec/2 + 1,ticks_per_sec) << std::endl;
+    std::cout << "pretty_print 1ms  :" << pretty_print(ticks_per_sec/1000+1,ticks_per_sec) << std::endl;
+    std::cout << "pretty_print 1us  :" << pretty_print(ticks_per_sec/1000000+1,ticks_per_sec) << std::endl;
+}
+
+void test1()
+{
+    std::string line {"Changhua;46.64617051711254"};
+    const auto isep = line.find(';');
+    std::string_view name {line.data(),isep};
+    std::string_view svalue {line.data()+isep+1, line.size()-isep};
+    float value;
+    const auto [ptr, ec] = std::from_chars(svalue.data(), svalue.data() + svalue.size(), value);
+    if (ec == std::errc::invalid_argument) {
+        std::cout << "invalid line " << line << std::endl;
+    }
+}
+
+int main(int argc, const char** argv)
+{
+    test1();
+
+    const auto ticks_per_sec = calc_ticks_per_sec();
+    
+    if (argc < 2) {
+        std::cout << "provide input filename" << std::endl;
+        return 1;
+    }
+    std::ifstream input {argv[1]};
+
+    if (!input.is_open()) {
+        std::cout << "input file opening error" << std::endl;
+        return 1;
+    }
+    const auto impl_idx = argc > 2 ? atoi(argv[2]) : 1;
+    std::cout << "using implementation idx " << impl_idx << std::endl;
+    if (1 == impl_idx) {
+        std::cout << "using basic implementation [1] std::map + std::string" << std::endl;
+    } else if (2 == impl_idx ) {
+        std::cout << "using basic implementation [2] std::map + std::string_view" << std::endl;
+    } else if (3 == impl_idx ) {
+        std::cout << "using basic implementation [3] std::unordered_map + std::string" << std::endl;
+    } else if (4 == impl_idx ) {
+        std::cout << "using basic implementation [4] std::unordered_map + std::string_view" << std::endl;
+    }
+    const auto repeat_cnt = argc > 3 ? atoi(argv[3]) : 1;
+    for (int i=0;i<repeat_cnt;++i)
+    {
+        auto tm_start = get_ticks();
+        if (1 == impl_idx) {
+            test_load_1(input);
+        } else if (2 == impl_idx ) {
+            test_load_2(input);
+        } else if (3 == impl_idx ) {
+            test_load_3(input);
+        } else if (4 == impl_idx ) {
+            test_load_4(input);
+        }
+        auto dt = get_ticks() - tm_start;
+        std::cout << "iter[" << i << "] " << pretty_print(dt,ticks_per_sec) << std::endl;
+        input.clear();
+        input.seekg(0,std::ios_base::beg);
+    }
+    return 0;
+}
