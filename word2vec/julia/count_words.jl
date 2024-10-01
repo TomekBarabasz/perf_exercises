@@ -183,9 +183,9 @@ end
 function main()
     @show Threads.nthreads()
     args = parseCommandLine()
-    println("read file")
+    println("read file --------------")
     filename = args["input"]
-    content = read(filename, String)
+    @time content = read(filename, String)
     println("ref count --------------")
     @time s = content |> (X -> split(X, r"[ ,.]+"; keepempty=false)) |> Set
     println("fast count --------------")

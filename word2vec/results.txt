@@ -1,0 +1,20 @@
+
+# text_long.txt
+## c++
+count_distinct_words_mmap_stdringview
+tot_add_word time 1 s 29 ms 247 us
+exec time 8 s 846 ms 49 us
+distinct words in a text : 253854
+
+count_distinct_words_mmap
+tot_add_word time 1 s 32 ms 365 us
+exec time 7 s 765 ms 712 us
+distinct words in a text : 253854
+
+count_distinct_words [normal read]
+add last word
+tot_add_word time 685 ms 194 us
+exec time 2 s 421 ms 283 us
+distinct words in a text : 253854
+
+## julia
