@@ -10,33 +10,9 @@
 #include <utility>
 #include <unistd.h>
 #include <charconv>
+#include <perf.h>
 
-uint64_t get_ticks() 
-{
-    return __rdtsc();
-}
-
-uint64_t calc_ticks_per_sec()
-{
-    auto tm_start = get_ticks();
-    usleep(1000000);
-    return get_ticks() - tm_start;
-}
-
-std::string pretty_print(uint64_t dt, uint64_t ticks_per_second)
-{
-    const auto dt_in_seconds = static_cast<double>(dt) / static_cast<double>(ticks_per_second);
-    const auto seconds = static_cast<uint64_t>(dt_in_seconds);
-    const auto fraction = dt_in_seconds - seconds;
-    const auto msec = static_cast<uint64_t>(fraction * 1000);
-    const auto usec = static_cast<uint64_t>(fraction * 1000000) % 1000;
-    std::ostringstream ss;
-    if (seconds > 0) {
-        ss << seconds << " s ";
-    }
-    ss << msec << " ms " << usec << " us";
-    return ss.str();
-}
+using utils::PerfCounter;
 
 struct Record {
     uint32_t cnt;
@@ -232,12 +208,13 @@ void test()
     auto value = std::stof(line.substr(isep+1));
     std::cout << "name=" << name << " value=" << value << std::endl;
 
-    const auto ticks_per_sec = calc_ticks_per_sec();
-    std::cout << "ticks_per_sec " << ticks_per_sec << std::endl;
-    std::cout << "pretty_print 1s   :" << pretty_print(ticks_per_sec,ticks_per_sec) << std::endl;
-    std::cout << "pretty_print 1/2s :" << pretty_print(ticks_per_sec/2 + 1,ticks_per_sec) << std::endl;
-    std::cout << "pretty_print 1ms  :" << pretty_print(ticks_per_sec/1000+1,ticks_per_sec) << std::endl;
-    std::cout << "pretty_print 1us  :" << pretty_print(ticks_per_sec/1000000+1,ticks_per_sec) << std::endl;
+    PerfCounter pc;
+    std::cout << "ticks_per_sec " << pc.ticks_per_sec << std::endl;
+    uint64_t ticks_per_sec = static_cast<uint64_t>( pc.ticks_per_sec );
+    std::cout << "pretty_print 1s   :" << pc.dt_to_string(ticks_per_sec) << std::endl;
+    std::cout << "pretty_print 1/2s :" << pc.dt_to_string(ticks_per_sec/2 + 1) << std::endl;
+    std::cout << "pretty_print 1ms  :" << pc.dt_to_string(ticks_per_sec/1000+1) << std::endl;
+    std::cout << "pretty_print 1us  :" << pc.dt_to_string(ticks_per_sec/1000000+1) << std::endl;
 }
 
 void test1()
@@ -256,8 +233,7 @@ void test1()
 int main(int argc, const char** argv)
 {
     test1();
-
-    const auto ticks_per_sec = calc_ticks_per_sec();
+    PerfCounter pc;
     
     if (argc < 2) {
         std::cout << "provide input filename" << std::endl;
@@ -283,7 +259,7 @@ int main(int argc, const char** argv)
     const auto repeat_cnt = argc > 3 ? atoi(argv[3]) : 1;
     for (int i=0;i<repeat_cnt;++i)
     {
-        auto tm_start = get_ticks();
+        auto tm_start = pc.timestamp();
         if (1 == impl_idx) {
             test_load_1(input);
         } else if (2 == impl_idx ) {
@@ -293,8 +269,8 @@ int main(int argc, const char** argv)
         } else if (4 == impl_idx ) {
             test_load_4(input);
         }
-        auto dt = get_ticks() - tm_start;
-        std::cout << "iter[" << i << "] " << pretty_print(dt,ticks_per_sec) << std::endl;
+        auto dt = pc.timestamp() - tm_start;
+        std::cout << "iter[" << i << "] " << pc.dt_to_string(dt) << std::endl;
         input.clear();
         input.seekg(0,std::ios_base::beg);
     }
