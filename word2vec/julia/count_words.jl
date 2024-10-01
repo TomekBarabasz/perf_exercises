@@ -1,4 +1,15 @@
-using Test
+using Test,ArgParse
+
+function parseCommandLine()
+    s = ArgParseSettings()
+    @add_arg_table! s begin
+        "input"
+            help = "input filename to parse"
+            arg_type = String
+            required = true
+    end
+    return parse_args(s)
+end
 
 function load_text(filename)
     content = read(filename, String)
@@ -159,21 +170,31 @@ function test4()
     @assert n_words == n_words_2
 end
 
-#run julia -t auto count_words.jl
-@show Threads.nthreads()
-#test_count_words()
-#test_split()
-#test3()
+function test_count_distinct_words()
+    println("read file")
+    content = read(filename, String)
+    @time s = content |> (X -> split(X, r"[ ,.]+"; keepempty=false)) |> Set
+    @time s2 = Set(split(content, r"[ ,.]+"; keepempty=false))
+    @time s1 = count_distinct_words(content,1,length(content))
+    d = setdiff(s,s1)
+    println("diff=$d len=$(length(d))")
+end
 
-#n = count_distinct_words(text,1,length(text))
-#@show n
-#test4()
+function main()
+    @show Threads.nthreads()
+    args = parseCommandLine()
+    println("read file")
+    filename = args["input"]
+    content = read(filename, String)
+    println("ref count --------------")
+    @time s = content |> (X -> split(X, r"[ ,.]+"; keepempty=false)) |> Set
+    println("fast count --------------")
+    count_distinct_words(content,1,100)
+    @time s1 = count_distinct_words(content,1,length(content))
+    d = setdiff(s,s1)
+    @assert length(d) == 0
+    println("distinct words in text : $(length(s))")
+end
 
-filename = "text_long.txt"
-println("read file")
-content = read(filename, String)
-@time s = content |> (X -> split(X, r"[ ,.]+"; keepempty=false)) |> Set
-@time s2 = Set(split(content, r"[ ,.]+"; keepempty=false))
-@time s1 = count_distinct_words(content,1,length(content))
-d = setdiff(s,s1)
-println("diff=$d len=$(length(d))")
+main()
+
