@@ -146,7 +146,9 @@ int count_distinct_words(const char* filename, PerfCounter& pc)
     size_t size = input.tellg();
     input.seekg(0,std::ios::beg);
     std::vector<char> buffer(size);
+    const auto t0 = pc.timestamp();
     input.read(buffer.data(), size);
+    cout << "data read time " << pc.dt_to_string(pc.timestamp()-t0) << endl;
     if (input.gcount() != size) {
         throw std::runtime_error("read error");
     }
@@ -211,29 +213,40 @@ int main(int argc,const char** argv)
     PerfCounter pc;
 
     const char* filename {argc > 1 ? argv[1] : "text_short.txt"};
+    const unsigned int test_sel = argc > 2 ? std::stoi(argv[2]) : (unsigned)-1;
+
     cout << "using file " << filename << endl;
-    cout << "count_distinct_words_mmap [using stringview]" << endl;
-    auto t0 = pc.timestamp();
-    auto cnt = count_distinct_words_mmap_stringview(filename,pc);
-    auto t1 = pc.timestamp();
-    cout << "exec time " << pc.dt_to_string(t1-t0) << endl;
-    cout << "distinct words in a text : " << cnt << endl;
-    cout << endl;
+    if (test_sel & 1)
+    {
+        cout << "count_distinct_words_mmap [using stringview]" << endl;
+        auto t0 = pc.timestamp();
+        auto cnt = count_distinct_words_mmap_stringview(filename,pc);
+        auto t1 = pc.timestamp();
+        cout << "exec time " << pc.dt_to_string(t1-t0) << endl;
+        cout << "distinct words in a text : " << cnt << endl;
+        cout << endl;
+    }
+    
+    if (test_sel & 2)
+    {
+        cout << "count_distinct_words_mmap" << endl;
+        auto t0 = pc.timestamp();
+        auto cnt = count_distinct_words_mmap(filename,pc);
+        auto t1 = pc.timestamp();
+        cout << "exec time " << pc.dt_to_string(t1-t0) << endl;
+        cout << "distinct words in a text : " << cnt << endl;
+        cout << endl;
+    }
 
-    cout << "count_distinct_words_mmap" << endl;
-    t0 = pc.timestamp();
-    cnt = count_distinct_words_mmap(filename,pc);
-    t1 = pc.timestamp();
-    cout << "exec time " << pc.dt_to_string(t1-t0) << endl;
-    cout << "distinct words in a text : " << cnt << endl;
-    cout << endl;
-
-    cout << "count_distinct_words [normal read,string_view]" << endl;
-    t0 = pc.timestamp();
-    cnt = count_distinct_words(filename,pc);
-    t1 = pc.timestamp();
-    cout << "exec time " << pc.dt_to_string(t1-t0) << endl;
-    cout << "distinct words in a text : " << cnt << endl;
+    if (test_sel & 4)
+    {
+        cout << "count_distinct_words [normal read,string_view]" << endl;
+        auto t0 = pc.timestamp();
+        auto cnt = count_distinct_words(filename,pc);
+        auto t1 = pc.timestamp();
+        cout << "exec time " << pc.dt_to_string(t1-t0) << endl;
+        cout << "distinct words in a text : " << cnt << endl;
+    }
 
     return 0;
 }
