@@ -1,9 +1,6 @@
 import numpy as np
-import pandas as pd
 import string
 from tqdm import tqdm
-from scipy.spatial.distance import cosine
-#from sklearn.preprocessing import normalize
 import matplotlib.pyplot as plt
 import argparse
 from datetime import datetime
@@ -37,7 +34,7 @@ def prepare_train_data(Text, window_size, n_neg_samples, verbose = False):
 
     center_words = set()
     context_words = set()
-    for center_idx in range(window_size, len(Text)-window_size):
+    for center_idx in tqdm(range(window_size, len(Text)-window_size)):
         w = Text[center_idx]
         center_words.add(w)
         ctx_words = [Text[ci] for ci in range(center_idx-window_size, center_idx+window_size+1) if ci != center_idx and Text[ci] != w]        
@@ -77,40 +74,16 @@ def write_debug_output_i(filename,text,train_data,wdict):
         for i,r in enumerate(train_data):
             file.write(f'{i:3d}: ({wdict[r[0]]},{wdict[r[1]]},{r[2]})\n')
 
-def constrain_words_with_pd(train_data):
-    df = pd.DataFrame(columns=['center_word','context_word','label'],data=train_data)
-
-    print('center_words')
-    words = set(df.center_word)
-    print( words )
-    print('context_words')
-    cwords = set(df.context_word)
-    print( cwords )
-
-    common_words = np.intersect1d(df.context_word, df.center_word)
-    all_words = words.union(cwords)
-    print('word,is_center,is_context')
-    for w in all_words:
-        f1 = w in words
-        f2 = w in cwords
-        f3 = w in common_words
-        print(f'{w:15} {f1:5} {f2:5} {f3:5}')
-
-    words = common_words
-
-    df = df[(df.center_word.isin(words)) & (df.context_word.isin(words))].reset_index(drop=True)
-    print(df)
-
 def normalize(emb):
     emb /= np.linalg.norm(emb, axis=1, keepdims=True)
 
 def update_embeddings(main_emb, ctx_emb, train_data, learning_rate):
     e = main_emb[ train_data[:,0] ]
     c =  ctx_emb[ train_data[:,1] ]
-    cosine_similarity = np.sum( e*c, axis=1 )
+    dotp = np.sum( e*c, axis=1 )
     def sigmoid(v,scale=1):
         return 1 / (1+np.exp(-scale*v))
-    scores = sigmoid(cosine_similarity)
+    scores = sigmoid(dotp)
     errors = train_data[:,2] - scores
     # updates one for each row of train_data
     updates = (c-e) * errors.reshape(-1,1) * learning_rate 
@@ -132,7 +105,7 @@ def run_word2vec(train_data, n_words, embedding_size, n_iter, learning_rate):
     normalize(ctx_emb)
     # ctx_emb = normalize(ctx_emb, norm='l2') # from sklearn.preprocessing import normalize
 
-    for _ in range(n_iter):
+    for _ in tqdm(range(n_iter)):
         update_embeddings(main_emb, ctx_emb, train_data, learning_rate)
     
     return main_emb
